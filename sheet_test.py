@@ -65,5 +65,5 @@ if user_email:
     except Exception as e:
         st.error(f"เกิดข้อผิดพลาด: {e}")
 else:
-    st.title("💰 ระบบจัดการรายรับ-รายจ่ายส่วนบุคคล")
+    st.title("💰 Ubitmymoney")
     st.warning("👈 กรุณาระบุ Email ที่แถบด้านซ้ายเพื่อดูข้อมูลของคุณ")
