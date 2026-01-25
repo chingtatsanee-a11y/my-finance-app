@@ -4,87 +4,89 @@ import plotly.express as px
 import os
 from datetime import datetime
 
-# --- 1. การตั้งค่าโครงสร้างเว็บ ---
-st.set_page_config(page_title="Standalone Finance App", layout="wide")
+# --- 1. การตั้งค่าหน้าเว็บ ---
+st.set_page_config(page_title="Personal Finance Standalone", layout="wide")
 
-# --- 2. LOGIC: ระบบจัดการไฟล์ข้อมูล (Database Logic) ---
+# --- 2. LOGIC: การจัดการไฟล์ข้อมูล ---
 DB_FILE = "data.csv"
 
 def load_data():
-    # ถ้ามีไฟล์อยู่แล้วให้อ่านไฟล์มาใช้ ถ้าไม่มีให้สร้างตารางเปล่าขึ้นมาใหม่
     if os.path.exists(DB_FILE):
         df = pd.read_csv(DB_FILE)
     else:
+        # สร้างตารางเปล่าพร้อมชื่อคอลัมน์
         df = pd.DataFrame(columns=['ที่อยู่อีเมล', 'วัน/เดือน/ปี', 'รายรับ', 'รายจ่าย'])
         df.to_csv(DB_FILE, index=False)
     return df
 
-def save_data(new_df):
-    # บันทึกข้อมูลทับลงในไฟล์ data.csv
-    new_df.to_csv(DB_FILE, index=False)
+def save_data(df):
+    df.to_csv(DB_FILE, index=False)
 
-# --- 3. ระบบระบุตัวตน (Login) ---
+# --- 3. ระบบระบุตัวตน ---
 st.sidebar.title("🔐 เข้าสู่ระบบ")
 user_email = st.sidebar.text_input("กรอก Email ของคุณ:").strip()
 
 if user_email:
-    # ดึงข้อมูลจากไฟล์ .csv
     all_data = load_data()
-    
-    # กรองข้อมูลเฉพาะของ User คนนั้น
+    # กรองข้อมูลเฉพาะของ User (เพื่อนำไปใช้คำนวณและวาดกราฟ)
     user_data = all_data[all_data['ที่อยู่อีเมล'] == user_email].copy()
     
     st.title(f"📊 รายงานสรุปของ: {user_email}")
 
-    # --- 4. ส่วนของฟอร์มบันทึกข้อมูล (Add Logic) ---
+    # --- 4. LOGIC: การเพิ่มข้อมูล ---
     with st.expander("➕ บันทึกรายการใหม่"):
         with st.form("input_form", clear_on_submit=True):
-            col_date, col_inc, col_exp = st.columns(3)
-            d = col_date.date_input("วันที่", datetime.now())
-            date_str = d.strftime("%d/%m/%Y")
-            inc = col_inc.number_input("รายรับ (บาท)", min_value=0.0)
-            exp = col_exp.number_input("รายจ่าย (บาท)", min_value=0.0)
+            col1, col2, col3 = st.columns(3)
+            d = col1.date_input("วันที่", datetime.now())
+            inc = col2.number_input("รายรับ (บาท)", min_value=0.0)
+            exp = col3.number_input("รายจ่าย (บาท)", min_value=0.0)
             
             if st.form_submit_button("บันทึกข้อมูล"):
-                # สร้างแถวใหม่
                 new_row = pd.DataFrame([{
                     "ที่อยู่อีเมล": user_email,
-                    "วัน/เดือน/ปี": date_str,
+                    "วัน/เดือน/ปี": d.strftime("%d/%m/%Y"),
                     "รายรับ": inc,
                     "รายจ่าย": exp
                 }])
-                # รวมข้อมูลใหม่เข้ากับข้อมูลทั้งหมดแล้วบันทึกลงไฟล์
-                updated_data = pd.concat([all_data, new_row], ignore_index=True)
-                save_data(updated_data)
-                
-                st.success("บันทึกเรียบร้อย!")
-                st.rerun() # รีเฟรชหน้าเว็บเพื่อให้กราฟอัปเดตทันที
+                updated_all = pd.concat([all_data, new_row], ignore_index=True)
+                save_data(updated_all)
+                st.success("บันทึกสำเร็จ!")
+                st.rerun()
 
-    # --- 5. การประมวลผลและแสดงผล (Calculation Logic) ---
+    # --- 5. LOGIC: การแสดงผลและการลบข้อมูล ---
     if not user_data.empty:
-        # คำนวณยอดเงิน
-        inc_total = user_data['รายรับ'].sum()
-        exp_total = user_data['รายจ่าย'].sum()
-        
+        # ส่วนสรุปยอดเงิน
         c1, c2, c3 = st.columns(3)
-        c1.metric("รายรับสะสม", f"{inc_total:,.2f} ฿")
-        c2.metric("รายจ่ายสะสม", f"{exp_total:,.2f} ฿")
-        c3.metric("คงเหลือสุทธิ", f"{(inc_total - exp_total):,.2f} ฿")
+        c1.metric("รายรับรวม", f"{user_data['รายรับ'].sum():,.2f}")
+        c2.metric("รายจ่ายรวม", f"{user_data['รายจ่าย'].sum():,.2f}")
+        c3.metric("คงเหลือ", f"{(user_data['รายรับ'].sum() - user_data['รายจ่าย'].sum()):,.2f}")
 
-        # กราฟเส้นแยกรายรับ-รายจ่าย
-        st.subheader("📈 กราฟเส้นวิเคราะห์แนวโน้ม")
-        fig = px.line(user_data, x='วัน/เดือน/ปี', y=['รายรับ', 'รายจ่าย'], 
-                      markers=True, title=f"ประวัติการเงินของ {user_email}")
+        # กราฟเส้น
+        fig = px.line(user_data, x='วัน/เดือน/ปี', y=['รายรับ', 'รายจ่าย'], markers=True)
         st.plotly_chart(fig, use_container_width=True)
+
+        st.subheader("📝 ประวัติและรายการข้อมูล")
         
-        # ตารางข้อมูล
-        st.dataframe(user_data, use_container_width=True)
+        # --- 6. LOGIC: การลบข้อมูลทีละแถว ---
+        # สร้าง Loop เพื่อแสดงข้อมูลแต่ละแถวพร้อมปุ่มลบ
+        for index, row in user_data.iterrows():
+            col_info, col_del = st.columns([0.9, 0.1])
+            with col_info:
+                st.text(f"📅 {row['วัน/เดือน/ปี']} | ➕ {row['รายรับ']} | ➖ {row['รายจ่าย']}")
+            with col_del:
+                # ใช้ Index ของ DataFrame ทั้งหมด (all_data) เป็นกุญแจในการลบ
+                if st.button("🗑️", key=f"del_{index}"):
+                    # ลบแถวที่ตรงกับ index นั้นออกจาก all_data
+                    all_data = all_data.drop(index)
+                    save_data(all_data)
+                    st.warning("ลบรายการแล้ว")
+                    st.rerun()
+            st.divider()
+
     else:
-        st.info("👋 ยินดีต้อนรับ! คุณยังไม่มีข้อมูลในระบบ เริ่มบันทึกรายการแรกได้ที่ปุ่มด้านบนครับ")
+        st.info("ยังไม่มีข้อมูลในระบบ")
 
 else:
-    st.title("💰 Ubiymymoney")
-    st.info("👈 กรุณากรอก Email เพื่อเข้าถึงฐานข้อมูลส่วนตัวของคุณ")
-
-
+    st.title("💰 Ubitmymoney")
+    st.info("👈 กรุณากรอก Email เพื่อเข้าใช้งาน")
 
