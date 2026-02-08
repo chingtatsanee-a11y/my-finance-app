@@ -5,27 +5,28 @@ import os
 from datetime import datetime
 
 # --- 1. การตั้งค่าหน้าเว็บ ---
-st.set_page_config(page_title="Standalone Finance Dashboard", layout="wide")
+st.set_page_config(page_title="Ubitmymoney", layout="wide")
 
-# --- 2. LOGIC: ระบบจัดการฐานข้อมูลภายใน ---
-DB_FILE = "data.csv"
+# --- 2. LOGIC: ระบบจัดการฐานข้อมูลภายใน (ปรับให้รองรับ Cloud Path) ---
+# ใช้คำสั่งนี้เพื่อให้โปรแกรมหาไฟล์ data.csv เจอในทุกสภาพแวดล้อม
+current_dir = os.path.dirname(os.path.abspath(__file__))
+DB_FILE = os.path.join(current_dir, "data.csv")
 
 def load_data():
     if os.path.exists(DB_FILE):
-        df = pd.read_csv(DB_FILE)
-        
-        # LOGIC สำคัญ: จัดการวันที่ให้เรียงลำดับถูกต้อง
-        # แปลงข้อความวันที่ให้เป็นรูปแบบ Datetime เพื่อใช้ในการเรียงลำดับ
-        df['dt_temp'] = pd.to_datetime(df['วัน/เดือน/ปี'], format="%d/%m/%Y", dayfirst=True)
-        
-        # เรียงข้อมูลตามวันที่จากน้อยไปมาก (เก่าไปใหม่)
-        df = df.sort_values(by='dt_temp').reset_index(drop=True)
-        
-        # ลบคอลัมน์ชั่วคราวออก
-        df = df.drop(columns=['dt_temp'])
-        return df
+        try:
+            df = pd.read_csv(DB_FILE)
+            if not df.empty:
+                # แก้ปัญหาการประมวลผลวันที่: แปลงและเรียงลำดับจากเก่าไปใหม่
+                df['dt_temp'] = pd.to_datetime(df['วัน/เดือน/ปี'], format="%d/%m/%Y", dayfirst=True, errors='coerce')
+                df = df.dropna(subset=['dt_temp']) # ลบแถวที่วันที่ผิดพลาดป้องกันกราฟพัง
+                df = df.sort_values(by='dt_temp').reset_index(drop=True)
+                df = df.drop(columns=['dt_temp'])
+            return df
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}")
+            return pd.DataFrame(columns=['ที่อยู่อีเมล', 'วัน/เดือน/ปี', 'รายรับ', 'รายจ่าย'])
     else:
-        # สร้างตารางเปล่าหากยังไม่มีไฟล์
         df = pd.DataFrame(columns=['ที่อยู่อีเมล', 'วัน/เดือน/ปี', 'รายรับ', 'รายจ่าย'])
         df.to_csv(DB_FILE, index=False)
         return df
@@ -33,18 +34,20 @@ def load_data():
 def save_data(df):
     df.to_csv(DB_FILE, index=False)
 
-# --- 3. ระบบระบุตัวตน (Login) ---
+# --- 3. ส่วนแสดงผลหลัก ---
 st.sidebar.title("🔐 เข้าสู่ระบบ")
 user_email = st.sidebar.text_input("กรอก Email ของคุณ:", placeholder="example@gmail.com").strip()
 
-if user_email:
+if not user_email:
+    st.title("💰 Ubitmymoney")
+    st.info("👈 กรุณากรอก Email ที่แถบด้านซ้ายเพื่อเข้าใช้งาน")
+else:
     all_data = load_data()
-    # กรองข้อมูลเฉพาะของ User ที่ Login
     user_data = all_data[all_data['ที่อยู่อีเมล'] == user_email].copy()
     
     st.title(f"📊 รายงานสรุปของ: {user_email}")
 
-    # --- 4. LOGIC: การเพิ่มข้อมูลใหม่ (ป้องกันการ Reset ค่า) ---
+    # --- 4. ฟอร์มบันทึกข้อมูล ---
     with st.expander("➕ บันทึกรายการใหม่"):
         with st.form("input_form", clear_on_submit=True):
             col1, col2, col3 = st.columns(3)
@@ -59,15 +62,13 @@ if user_email:
                     "รายรับ": inc,
                     "รายจ่าย": exp
                 }])
-                # รวมข้อมูลและบันทึก
                 updated_all = pd.concat([all_data, new_row], ignore_index=True)
                 save_data(updated_all)
-                st.success("✅ บันทึกข้อมูลเรียบร้อย!")
+                st.success("บันทึกข้อมูลแล้ว!")
                 st.rerun()
 
-    # --- 5. การประมวลผลและแสดงผลกราฟ ---
+    # --- 5. การประมวลผลกราฟและสถิติ ---
     if not user_data.empty:
-        # ส่วนสรุปยอดเงิน
         c1, c2, c3 = st.columns(3)
         total_inc = user_data['รายรับ'].sum()
         total_exp = user_data['รายจ่าย'].sum()
@@ -75,29 +76,32 @@ if user_email:
         c2.metric("รายจ่ายรวม", f"{total_exp:,.2f} ฿")
         c3.metric("คงเหลือสุทธิ", f"{(total_inc - total_exp):,.2f} ฿")
 
-        # กราฟเส้นที่เรียงวันที่ถูกต้องแล้ว (ซ้ายไปขวา)
-        st.subheader("📈 แนวโน้มการเงินส่วนบุคคล")
+        st.subheader("📈 แนวโน้มการเงิน")
+        # ใช้มาร์กเกอร์และเส้นที่ชัดเจน
         fig = px.line(user_data, x='วัน/เดือน/ปี', y=['รายรับ', 'รายจ่าย'], 
-                      markers=True, title=f"ประวัติการเงินของ {user_email}")
-        
-        # ปรับแต่งให้แกน X เรียงตามลำดับข้อมูลที่ Sort มาแล้ว
-        fig.update_xaxes(type='category') 
+                      markers=True, title="กราฟรายรับ-รายจ่าย")
+        fig.update_xaxes(type='category') # บังคับให้เรียงตามลำดับข้อมูลที่เรา Sort ไว้
         st.plotly_chart(fig, use_container_width=True)
 
-        # --- 6. LOGIC: การลบข้อมูล ---
-        st.subheader("📝 รายการข้อมูลของคุณ")
+        # --- 6. รายการและการลบ ---
+        st.subheader("📝 รายการทั้งหมด")
         for index, row in user_data.iterrows():
-            col_text, col_btn = st.columns([0.85, 0.15])
-            col_text.text(f"📅 {row['วัน/เดือน/ปี']} | ➕ {row['รายรับ']:,.2f} | ➖ {row['รายจ่าย']:,.2f}")
-            if col_btn.button("🗑️ ลบ", key=f"del_{index}"):
+            col_t, col_b = st.columns([0.8, 0.2])
+            col_t.text(f"📅 {row['วัน/เดือน/ปี']} | +{row['รายรับ']} | -{row['รายจ่าย']}")
+            if col_b.button("🗑️ ลบ", key=f"del_{index}"):
                 all_data = all_data.drop(index)
                 save_data(all_data)
                 st.rerun()
-            st.divider()
-
     else:
-        st.info("👋 ยังไม่มีข้อมูลในระบบ เริ่มบันทึกรายการแรกได้ที่ปุ่มด้านบนครับ")
+        st.warning("ยังไม่มีข้อมูลบันทึกในระบบ")
+        # ส่วนการเลือกหมวดหมู่เพื่อแสดงกราฟแยก
+all_categories = user_data['หมวดหมู่'].unique()
+selected_cat = st.selectbox("เลือกหมวดหมู่ที่ต้องการดู:", all_categories)
 
-else:
-    st.title("💰 Ubitmymoney")
-    st.info("👈 กรุณากรอก Email เพื่อเข้าถึงฐานข้อมูลส่วนตัวของคุณ")
+# กรองข้อมูลตามหมวดหมู่ที่เลือก
+filtered_data = user_data[user_data['หมวดหมู่'] == selected_cat]
+
+# วาดกราฟแยกตามหมวดหมู่
+fig = px.line(filtered_data, x='วัน/เดือน/ปี', y=['รายรับ', 'รายจ่าย'], 
+              title=f"กราฟสรุปในหมวดหมู่: {selected_cat}", markers=True)
+st.plotly_chart(fig, use_container_width=True)
