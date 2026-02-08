@@ -4,62 +4,66 @@ import plotly.express as px
 import os
 from datetime import datetime
 
-# --- 1. การตั้งค่าหน้าเว็บ ---
+# --- 1. การตั้งค่าหน้าเว็บ (และ CSS ตกแต่ง) ---
 st.set_page_config(page_title="Ubitmymoney", layout="wide")
+
+# CSS สำหรับพื้นหลังดอกทานตะวัน และไอคอน
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background-image: url("https://images.unsplash.com/photo-1577777490219-fc697669d651?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D");
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        background-position: center;
+    }
+    .css-1d3xcrz { /* Streamlit sidebar container */
+        background-color: rgba(255, 255, 255, 0.8); /* ให้ Sidebar โปร่งแสงเล็กน้อย */
+        border-radius: 10px;
+        padding: 10px;
+    }
+    .reportview-container .main .block-container{
+        padding-top: 2rem;
+        padding-right: 2rem;
+        padding-left: 2rem;
+        padding-bottom: 2rem;
+        background-color: rgba(255, 255, 255, 0.85); /* เนื้อหาหลักโปร่งแสงเล็กน้อย */
+        border-radius: 10px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 DB_FILE = "data.csv"
 
 # --- 2. ระบบแปลภาษาหมวดหมู่ (Custom Mapping) ---
-# ระบบจะจำว่าถ้าพิมพ์คำซ้าย ให้แปลเป็นคำขวาเมื่อสลับภาษา
 category_map = {
-    "อาหาร": "Food",
-    "เดินทาง": "Travel",
-    "ที่พัก": "Housing",
-    "ช้อปปิ้ง": "Shopping",
-    "ทั่วไป": "General",
-    "เงินเดือน": "Salary"
+    "อาหาร": "Food", "เดินทาง": "Travel", "ที่พัก": "Housing",
+    "ช้อปปิ้ง": "Shopping", "ทั่วไป": "General", "เงินเดือน": "Salary",
+    "ค่าไฟ": "Electricity", "ค่าน้ำ": "Water Bill" # เพิ่มหมวดหมู่ตัวอย่าง
 }
-# สร้าง Mapping ขากลับ (English -> Thai)
 inv_category_map = {v: k for k, v in category_map.items()}
 
 languages = {
     "ไทย": {
-        "login": "🔐 เข้าสู่ระบบ",
-        "email_label": "กรอก Email ของคุณ:",
-        "main_title": "📊 รายงานสรุปของ:",
-        "total_overview": "🏦 ยอดรวมภาพรวม",
-        "inc_total": "รายรับรวม",
-        "exp_total": "รายจ่ายรวม",
-        "bal_total": "คงเหลือสุทธิ",
-        "new_entry": "➕ บันทึกรายการใหม่",
-        "date": "วันที่",
-        "category": "ระบุหมวดหมู่:",
-        "income": "รายรับ (บาท)",
-        "expense": "รายจ่าย (บาท)",
-        "save": "บันทึกข้อมูล",
-        "cat_analysis": "📈 วิเคราะห์รายหมวดหมู่",
-        "select_cat": "เลือกหมวดหมู่ที่ต้องการดู:",
-        "history": "📝 รายการทั้งหมด",
-        "delete": "🗑️ ลบ"
+        "login": "🔐 เข้าสู่ระบบ", "email_label": "กรอก Email ของคุณ:",
+        "main_title": "📊 รายงานสรุปของ:", "total_overview": "🏦 ยอดรวมภาพรวม",
+        "inc_total": "รายรับรวม", "exp_total": "รายจ่ายรวม", "bal_total": "คงเหลือสุทธิ",
+        "new_entry": "➕ บันทึกรายการใหม่", "date": "วันที่", "category": "ระบุหมวดหมู่:",
+        "income": "รายรับ (บาท)", "expense": "รายจ่าย (บาท)", "save": "บันทึกข้อมูล",
+        "cat_analysis": "📈 วิเคราะห์รายหมวดหมู่", "select_cat": "เลือกหมวดหมู่ที่ต้องการดู:",
+        "history": "📝 รายการทั้งหมด", "delete": "🗑️ ลบ"
     },
     "English": {
-        "login": "🔐 Login",
-        "email_label": "Enter your Email:",
-        "main_title": "📊 Summary for:",
-        "total_overview": "🏦 Overall Overview",
-        "inc_total": "Total Income",
-        "exp_total": "Total Expense",
-        "bal_total": "Net Balance",
-        "new_entry": "➕ Add New Entry",
-        "date": "Date",
-        "category": "Enter Category:",
-        "income": "Income (฿)",
-        "expense": "Expense (฿)",
-        "save": "Save Data",
-        "cat_analysis": "📈 Category Analysis",
-        "select_cat": "Select category to view:",
-        "history": "📝 Transaction History",
-        "delete": "🗑️ Delete"
+        "login": "🔐 Login", "email_label": "Enter your Email:",
+        "main_title": "📊 Summary for:", "total_overview": "🏦 Overall Overview",
+        "inc_total": "Total Income", "exp_total": "Total Expense", "bal_total": "Net Balance",
+        "new_entry": "➕ Add New Entry", "date": "Date", "category": "Enter Category:",
+        "income": "Income (฿)", "expense": "Expense (฿)", "save": "Save Data",
+        "cat_analysis": "📈 Category Analysis", "select_cat": "Select category to view:",
+        "history": "📝 Transaction History", "delete": "🗑️ Delete"
     }
 }
 
@@ -69,8 +73,8 @@ text = languages[lang_choice]
 # --- 3. ฟังก์ชันแปลชื่อหมวดหมู่แบบ Real-time ---
 def translate_cat(cat_name, target_lang):
     if target_lang == "English":
-        return category_map.get(cat_name, cat_name) # ถ้าไม่มีในดิกให้ใช้คำเดิม
-    else:
+        return category_map.get(cat_name, cat_name)
+    else: # แปลกลับเป็นไทย
         return inv_category_map.get(cat_name, cat_name)
 
 # --- 4. LOGIC: จัดการข้อมูล ---
@@ -89,7 +93,11 @@ def save_data(df):
     df.to_csv(DB_FILE, index=False)
 
 # --- 5. การแสดงผลหน้าเว็บ ---
+# เพิ่มดอกทานตะวันใน Sidebar
+st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Sunflower_from_Silesia2.jpg/800px-Sunflower_from_Silesia2.jpg", width=150)
+st.sidebar.markdown("<h1 style='text-align: center;'>Ubitmymoney</h1>", unsafe_allow_html=True)
 st.sidebar.divider()
+
 user_email = st.sidebar.text_input(text["email_label"]).strip()
 
 if user_email:
@@ -109,13 +117,14 @@ if user_email:
         c1.metric(text["inc_total"], f"{t_inc:,.2f} ฿")
         c2.metric(text["exp_total"], f"{t_exp:,.2f} ฿")
         c3.metric(text["bal_total"], f"{(t_inc - t_exp):,.2f} ฿")
+        st.divider()
 
     # ฟอร์มบันทึกรายการ
     with st.expander(text["new_entry"]):
         with st.form("input_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
             d = col1.date_input(text["date"], datetime.now())
-            cat_input = col2.text_input(text["category"]).strip()
+            cat_input = col2.text_input(text["category"], placeholder=text["category"]).strip() # เพิ่ม placeholder
             
             col3, col4 = st.columns(2)
             inc = col3.number_input(text["income"], min_value=0.0)
@@ -124,32 +133,42 @@ if user_email:
             if st.form_submit_button(text["save"]):
                 if not cat_input: cat_input = "ทั่วไป"
                 # บันทึกลง CSV เป็นภาษาไทยเสมอเพื่อเป็นมาตรฐานในการเก็บข้อมูล
-                save_cat = inv_category_map.get(cat_input, cat_input)
+                save_cat = inv_category_map.get(cat_input, cat_input) if lang_choice == "English" else cat_input # ถ้าพิมพ์อังกฤษให้พยายามแปลงเป็นไทย
+                if save_cat not in category_map and lang_choice == "English": # กรณีพิมพ์อังกฤษแล้วไม่มีใน map ให้บันทึกเป็นอังกฤษเลย
+                    save_cat = cat_input 
+                elif save_cat not in category_map and lang_choice == "ไทย": # กรณีพิมพ์ไทยแล้วไม่มีใน map ให้บันทึกเป็นไทยเลย
+                    save_cat = cat_input
+
                 new_row = pd.DataFrame([{"ที่อยู่อีเมล": user_email, "วัน/เดือน/ปี": d.strftime("%d/%m/%Y"), 
                                          "หมวดหมู่": save_cat, "รายรับ": inc, "รายจ่าย": exp}])
                 updated_all = pd.concat([all_data, new_row], ignore_index=True)
                 save_data(updated_all)
+                st.success(f"{text['save']} {text['category']} '{save_cat}' เรียบร้อย!") # แสดงข้อความเป็นภาษาที่เลือก
                 st.rerun()
 
     # กราฟแยกหมวดหมู่
     if not user_data.empty:
         st.subheader(text["cat_analysis"])
         unique_cats = user_data['หมวดหมู่_display'].unique()
-        selected_cat_dis = st.selectbox(text["select_cat"], unique_cats)
         
-        # กรองข้อมูลจากชื่อที่แสดงผล
-        cat_df = user_data[user_data['หมวดหมู่_display'] == selected_cat_dis]
-        
-        # ยอดสรุปเฉพาะหมวด
-        m1, m2, m3 = st.columns(3)
-        c_inc, c_exp = cat_df['รายรับ'].sum(), cat_df['รายจ่าย'].sum()
-        m1.metric(f"{text['income']} ({selected_cat_dis})", f"{c_inc:,.2f} ฿")
-        m2.metric(f"{text['expense']} ({selected_cat_dis})", f"{c_exp:,.2f} ฿")
-        m3.metric(f"{text['bal_total']} ({selected_cat_dis})", f"{(c_inc - c_exp):,.2f} ฿")
+        # ตรวจสอบว่ามีหมวดหมู่ให้เลือกไหม ถ้าไม่มีให้ขึ้นข้อความ
+        if len(unique_cats) > 0:
+            selected_cat_dis = st.selectbox(text["select_cat"], unique_cats)
+            
+            cat_df = user_data[user_data['หมวดหมู่_display'] == selected_cat_dis]
+            
+            # ยอดสรุปเฉพาะหมวด
+            m1, m2, m3 = st.columns(3)
+            c_inc, c_exp = cat_df['รายรับ'].sum(), cat_df['รายจ่าย'].sum()
+            m1.metric(f"{text['income']} ({selected_cat_dis})", f"{c_inc:,.2f} ฿")
+            m2.metric(f"{text['expense']} ({selected_cat_dis})", f"{c_exp:,.2f} ฿")
+            m3.metric(f"{text['bal_total']} ({selected_cat_dis})", f"{(c_inc - c_exp):,.2f} ฿")
 
-        fig = px.line(cat_df, x='วัน/เดือน/ปี', y=['รายรับ', 'รายจ่าย'], markers=True, title=selected_cat_dis)
-        fig.update_xaxes(type='category')
-        st.plotly_chart(fig, use_container_width=True)
+            fig = px.line(cat_df, x='วัน/เดือน/ปี', y=['รายรับ', 'รายจ่าย'], markers=True, title=selected_cat_dis)
+            fig.update_xaxes(type='category')
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("ยังไม่มีข้อมูลหมวดหมู่ให้แสดงกราฟ")
 
         # รายการย้อนหลังและปุ่มลบ
         st.subheader(text["history"])
@@ -162,6 +181,9 @@ if user_email:
                 save_data(all_data)
                 st.rerun()
             st.divider()
+    else:
+        st.info("เริ่มบันทึกข้อมูลแรกเพื่อแสดงกราฟส่วนตัว")
+
 else:
     st.title("💰 UBITMYMONEY")
     st.info("👈 Login to continue / กรุณาเข้าสู่ระบบ")
