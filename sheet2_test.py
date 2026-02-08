@@ -12,7 +12,7 @@ DB_FILE = "data.csv"
 def load_data():
     if os.path.exists(DB_FILE):
         df = pd.read_csv(DB_FILE)
-        # แก้ปัญหา KeyError: ตรวจสอบว่ามีคอลัมน์ 'หมวดหมู่' หรือยัง ถ้าไม่มีให้สร้างขึ้นมา
+        # ตรวจสอบคอลัมน์หมวดหมู่เพื่อป้องกัน Error
         if 'หมวดหมู่' not in df.columns:
             df['หมวดหมู่'] = 'ทั่วไป'
         
@@ -22,7 +22,6 @@ def load_data():
             df = df.drop(columns=['dt_temp'])
         return df
     else:
-        # สร้าง Header เริ่มต้นรวมหมวดหมู่เข้าไปด้วย
         df = pd.DataFrame(columns=['ที่อยู่อีเมล', 'วัน/เดือน/ปี', 'หมวดหมู่', 'รายรับ', 'รายจ่าย'])
         df.to_csv(DB_FILE, index=False)
         return df
@@ -40,19 +39,23 @@ if user_email:
     
     st.title(f"📊 รายงานของ: {user_email}")
 
-    # --- ฟอร์มบันทึกข้อมูล (เพิ่มช่องเลือกหมวดหมู่) ---
+    # --- ฟอร์มบันทึกข้อมูล (เปลี่ยนเป็นช่องพิมพ์หมวดหมู่เอง) ---
     with st.expander("➕ บันทึกรายการใหม่"):
         with st.form("input_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
             d = col1.date_input("วันที่", datetime.now())
-            # ให้ผู้ใช้พิมพ์หรือเลือกหมวดหมู่
-            cat = col2.selectbox("หมวดหมู่", ["อาหาร", "เดินทาง", "ที่พัก", "ช้อปปิ้ง", "อื่นๆ"])
+            
+            # เปลี่ยนจาก selectbox เป็น text_input เพื่อให้พิมพ์เองได้ตามใจชอบ
+            cat = col2.text_input("ระบุหมวดหมู่ (เช่น ค่ากาแฟ, ของใช้, เงินเดือน):", placeholder="พิมพ์หมวดหมู่ที่นี่").strip()
             
             col3, col4 = st.columns(2)
-            inc = col3.number_input("รายรับ (บาท)", min_value=0.0)
-            exp = col4.number_input("รายจ่าย (บาท)", min_value=0.0)
+            inc = col3.number_input("รายรับ (บาท)", min_value=0.0, step=100.0)
+            exp = col4.number_input("รายจ่าย (บาท)", min_value=0.0, step=100.0)
             
             if st.form_submit_button("บันทึกข้อมูล"):
+                if not cat: # ป้องกันกรณีลืมพิมพ์หมวดหมู่
+                    cat = "ทั่วไป"
+                
                 new_row = pd.DataFrame([{
                     "ที่อยู่อีเมล": user_email,
                     "วัน/เดือน/ปี": d.strftime("%d/%m/%Y"),
@@ -62,33 +65,33 @@ if user_email:
                 }])
                 updated_all = pd.concat([all_data, new_row], ignore_index=True)
                 save_data(updated_all)
-                st.success("บันทึกสำเร็จ!")
+                st.success(f"บันทึกหมวดหมู่ '{cat}' เรียบร้อย!")
                 st.rerun()
 
-    # --- ส่วนการแยกกราฟตามหมวดหมู่ ---
+    # --- ส่วนการแสดงผลแยกกราฟ ---
     if not user_data.empty:
-        st.subheader("📈 แยกกราฟตามหมวดหมู่")
+        st.subheader("📈 วิเคราะห์แยกตามหมวดหมู่ที่คุณสร้าง")
         
-        # ดึงรายชื่อหมวดหมู่ที่มีข้อมูลจริงมาสร้างตัวเลือก
-        categories = user_data['หมวดหมู่'].unique()
-        selected_cat = st.selectbox("เลือกหมวดหมู่ที่ต้องการดูข้อมูล:", categories)
+        # ดึงหมวดหมู่ทั้งหมดที่ผู้ใช้คนนี้เคยพิมพ์ไว้มาสร้างตัวเลือกในกราฟ
+        user_categories = user_data['หมวดหมู่'].unique()
+        selected_cat = st.selectbox("เลือกหมวดหมู่ที่ต้องการดูแนวโน้ม:", user_categories)
         
-        # กรองข้อมูลเฉพาะหมวดที่เลือก
+        # กรองข้อมูลและประมวลผลกราฟ
         cat_df = user_data[user_data['หมวดหมู่'] == selected_cat]
         
-        # วาดกราฟ
         fig = px.line(cat_df, x='วัน/เดือน/ปี', y=['รายรับ', 'รายจ่าย'], 
-                      markers=True, title=f"แนวโน้มในหมวด: {selected_cat}")
+                      markers=True, title=f"ประวัติการเงินหมวด: {selected_cat}",
+                      color_discrete_map={"รายรับ": "#2ECC71", "รายจ่าย": "#E74C3C"})
+        
         fig.update_xaxes(type='category')
         st.plotly_chart(fig, use_container_width=True)
 
-        # รายการทั้งหมด
-        st.subheader("📝 รายการทั้งหมด")
-        for index, row in user_data.iterrows():
-            st.write(f"📅 {row['วัน/เดือน/ปี']} | 📂 {row['หมวดหมู่']} | ➕ {row['รายรับ']} | ➖ {row['รายจ่าย']}")
-            if st.button("ลบ", key=f"del_{index}"):
-                all_data = all_data.drop(index)
-                save_data(all_data)
-                st.rerun()
+        # รายการตารางข้อมูล
+        with st.expander("ดูรายการทั้งหมด"):
+            st.dataframe(user_data[['วัน/เดือน/ปี', 'หมวดหมู่', 'รายรับ', 'รายจ่าย']], use_container_width=True)
     else:
-        st.info("เริ่มบันทึกข้อมูลแรกเพื่อแสดงกราฟแยกหมวดหมู่")
+        st.info("พิมพ์หมวดหมู่และบันทึกข้อมูลแรกเพื่อเริ่มสร้างกราฟส่วนตัว")
+
+else:
+    st.title("💰 Ubitmymoney")
+    st.warning("👈 โปรดระบุ Email เพื่อดึงข้อมูลหมวดหมู่ส่วนตัวของคุณ")
