@@ -52,8 +52,8 @@ st.markdown("""
 def sunflower_header():
     st.markdown("""
         <div style="background-color:#FFD54F; padding:20px; border-radius:15px; text-align:center; margin-bottom:20px;">
-            <h1 style="color:#5D4037; margin:0;">🌻 Ubitmymoney 🌻</h1>
-            <p style="color:#795548; font-size:1.2rem;">จัดการเงินของคุณให้สดใสเหมือนดอกทานตะวัน</p>
+            <h1 style="color:#5D4037; margin:0;">🌻 UBITMYMONEY 🌻</h1>
+            <p style="color:#795548; font-size:1.2rem;">🌻WE HATE🌻FOR THE REASON🌻</p>
         </div>
     """, unsafe_allow_html=True)
 
